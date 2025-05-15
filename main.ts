@@ -94,18 +94,19 @@ function getHeaders(apiKey: string): Record<string, string> {
   return {
     "accept": "*/*",
     "accept-encoding": "gzip, deflate, br, zstd",
-    "accept-language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+    "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
     "content-type": "application/json",
-    "origin": "chrome-extension://client",
+    "origin": "chrome-extension://minfmdkpoboejckenbchpjbjjkbdebdm",
     "i-lang": "zh-CN",
-    "i-version": "1.1.64",
-    "sec-ch-ua": '"Chromium";v="134", "Not:A-Brand";v="24"',
+    "i-version": "1.5.8",
+    "i-sign": "eyJub25jZSI6ImtrcDlHdnFhU2lkcjFSUmEiLCJ0aW1lc3RhbXAiOjE3NDcyODY4MjUyODMsInNpZ24iOiJlNmVhMTc0MGI0MGRmZGMxZGE2OGNjOGMzMzQ1YTc5ZiJ9",
+    "sec-ch-ua": '"Not(A:Brand";v="99", "Microsoft Edge";v="133", "Chromium";v="133"',
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": "Windows",
     "sec-fetch-dest": "empty",
     "sec-fetch-mode": "cors",
     "sec-fetch-site": "cross-site",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0",
     "authorization": `Bearer ${currentToken.trim()}`
   };
 }
@@ -125,26 +126,27 @@ function mapOpenaiToDeepsiderModel(model: string): string {
 }
 
 function formatMessagesForDeepsider(messages: ChatMessage[]): string {
+  // For simplicity, just get the last user message and use it directly
+  // This matches the simplified format seen in the example request
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "user") {
+      return messages[i].content;
+    }
+  }
+  
+  // If no user message is found, concatenate all messages as before
   let prompt = "";
   for (const msg of messages) {
     const role = msg.role;
-    // Map OpenAI roles to DeepSider format
     if (role === "system") {
-      // System messages at the beginning as guidance
       prompt = `${msg.content}\n\n` + prompt;
     } else if (role === "user") {
       prompt += `Human: ${msg.content}\n\n`;
     } else if (role === "assistant") {
       prompt += `Assistant: ${msg.content}\n\n`;
     } else {
-      // Other roles treated as user
       prompt += `Human (${role}): ${msg.content}\n\n`;
     }
-  }
-  
-  // If the last message is not from the user, add a Human prefix to prompt a response
-  if (messages.length > 0 && messages[messages.length - 1].role !== "user") {
-    prompt += "Human: ";
   }
   
   return prompt.trim();
