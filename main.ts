@@ -98,7 +98,7 @@ function getHeaders(apiKey: string): Record<string, string> {
     "content-type": "application/json",
     "origin": "chrome-extension://client",
     "i-lang": "zh-CN",
-    "i-version": "1.1.64",
+    "i-version": "1.5.6",
     "sec-ch-ua": '"Chromium";v="134", "Not:A-Brand";v="24"',
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": "Windows",
