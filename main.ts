@@ -1,6 +1,7 @@
 // Import required modules
 import { Application, Router, Context, Request } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { config } from "https://deno.land/x/dotenv@v3.2.2/mod.ts";
+import { createHash } from "https://deno.land/std@0.208.0/crypto/mod.ts";
 
 // Load environment variables
 const env = config();
@@ -41,7 +42,7 @@ const MODEL_MAPPING: Record<string, string> = {
   "gpt-4o": "openai/gpt-4o",
   "gpt-4o-image": "openai/gpt-4o-image",
   "o1": "openai/o1",
-  "o3-mini": "oopenai/o3-mini",
+  "o3-mini": "openai/o3-mini",
   "claude-3.5-sonnet": "anthropic/claude-3.5-sonnet",
   "claude-3.7-sonnet": "anthropic/claude-3.7-sonnet",
   "grok-3": "x-ai/grok-3",
@@ -76,6 +77,32 @@ interface ChatCompletionRequest {
   user?: string;
 }
 
+// 生成随机字符串
+function generateRandomString(length: number): string {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let result = "";
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+// 生成i-sign头部
+function generateSign(): string {
+  const nonce = generateRandomString(12);
+  const timestamp = Date.now();
+  
+  // 注意：这只是一个模拟签名，实际实现可能需要结合特定算法
+  // 示例中签名格式为 eyJub25jZSI6ImtrcDlHdnFhU2lkcjFSUmEiLCJ0aW1lc3RhbXAiOjE3NDcyODY4MjUyODMsInNpZ24iOiJlNmVhMTc0MGI0MGRmZGMxZGE2OGNjOGMzMzQ1YTc5ZiJ9
+  const signData = {
+    nonce,
+    timestamp,
+    sign: generateRandomString(32) // 模拟哈希值
+  };
+  
+  return btoa(JSON.stringify(signData));
+}
+
 // Helper functions
 function getHeaders(apiKey: string): Record<string, string> {
   // Check if multiple tokens are provided (comma-separated)
@@ -91,22 +118,24 @@ function getHeaders(apiKey: string): Record<string, string> {
     currentToken = apiKey;
   }
   
+  // 根据示例更新请求头
   return {
     "accept": "*/*",
-    "accept-encoding": "gzip, deflate, br, zstd",
-    "accept-language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
     "content-type": "application/json",
-    "origin": "chrome-extension://client",
-    "i-lang": "zh-CN",
-    "i-version": "1.1.64",
-    "sec-ch-ua": '"Chromium";v="134", "Not:A-Brand";v="24"',
+    "i-version": "1.5.8",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "authorization": `Bearer ${currentToken.trim()}`,
+    "sec-ch-ua": "\"Not(A:Brand\";v=\"99\", \"Microsoft Edge\";v=\"133\", \"Chromium\";v=\"133\"",
     "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": "Windows",
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0",
+    "i-sign": generateSign(),
+    "i-lang": "zh-CN",
+    "origin": "chrome-extension://minfmdkpoboejckenbchpjbjjkbdebdm",
     "sec-fetch-site": "cross-site",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
-    "authorization": `Bearer ${currentToken.trim()}`
+    "sec-fetch-mode": "cors",
+    "sec-fetch-dest": "empty",
+    "accept-encoding": "gzip, deflate, br, zstd",
+    "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6"
   };
 }
 
@@ -125,26 +154,24 @@ function mapOpenaiToDeepsiderModel(model: string): string {
 }
 
 function formatMessagesForDeepsider(messages: ChatMessage[]): string {
+  // 根据示例，将消息直接转换为prompt字符串
   let prompt = "";
-  for (const msg of messages) {
-    const role = msg.role;
-    // Map OpenAI roles to DeepSider format
-    if (role === "system") {
-      // System messages at the beginning as guidance
-      prompt = `${msg.content}\n\n` + prompt;
-    } else if (role === "user") {
-      prompt += `Human: ${msg.content}\n\n`;
-    } else if (role === "assistant") {
-      prompt += `Assistant: ${msg.content}\n\n`;
-    } else {
-      // Other roles treated as user
-      prompt += `Human (${role}): ${msg.content}\n\n`;
-    }
-  }
   
-  // If the last message is not from the user, add a Human prefix to prompt a response
-  if (messages.length > 0 && messages[messages.length - 1].role !== "user") {
-    prompt += "Human: ";
+  // 合并所有消息为单个prompt
+  for (const msg of messages) {
+    if (msg.role === "system") {
+      // 系统消息放在开头作为指导
+      prompt = `${msg.content}\n\n` + prompt;
+    } else if (msg.role === "user") {
+      // 用户消息直接添加内容
+      prompt += msg.content ? `${msg.content}\n\n` : "";
+    } else if (msg.role === "assistant") {
+      // 助手消息也直接添加内容
+      prompt += msg.content ? `${msg.content}\n\n` : "";
+    } else {
+      // 其他角色也直接添加内容
+      prompt += msg.content ? `${msg.content}\n\n` : "";
+    }
   }
   
   return prompt.trim();
@@ -302,7 +329,10 @@ async function checkAccountBalance(apiKey: string, tokenIndex: number | null = n
   const headers = {
     "accept": "*/*",
     "content-type": "application/json",
-    "authorization": `Bearer ${currentToken}`
+    "authorization": `Bearer ${currentToken}`,
+    "i-version": "1.5.8",
+    "i-lang": "zh-CN",
+    "i-sign": generateSign()
   };
   
   try {
@@ -386,14 +416,14 @@ router.post("/v1/chat/completions", async (ctx) => {
   // Map model
   const deepsiderModel = mapOpenaiToDeepsiderModel(chatRequest.model);
   
-  // Prepare prompt for DeepSider API
+  // Prepare prompt for DeepSider API - 根据示例更新
   const prompt = formatMessagesForDeepsider(chatRequest.messages);
   
-  // Prepare request payload
+  // Prepare request payload - 根据示例更新请求格式
   const payload = {
     "model": deepsiderModel,
     "prompt": prompt,
-    "webAccess": "close",  // Default: web access off
+    "webAccess": "close",
     "timezone": "Asia/Shanghai"
   };
   
